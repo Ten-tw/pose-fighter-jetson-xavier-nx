@@ -1,0 +1,11 @@
+*.pdf
+docker_image/
+__pycache__/
+*.py[cod]
+
+/source_code/
+
+/scripts/best.onnx
+/scripts/calib_images/
+/scripts/yolo_int8.engine
+/scripts/yolo_calib.cache

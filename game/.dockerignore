@@ -1,0 +1,13 @@
+*
+!.dockerignore
+!Dockerfile
+!main.py
+!run.sh
+!background.png
+!player1_idle.png
+!player1_punch.png
+!player1_defend.png
+!player2_idle.png
+!player2_punch.png
+!player2_defend.png
+!yolov8n-pose.engine
