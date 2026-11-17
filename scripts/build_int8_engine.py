@@ -5,7 +5,7 @@ import numpy as np
 import pycuda.driver as cuda
 import pycuda.autoinit
 
-# INT8 實驗腳本：原始校準資料未保留，需自行提供 ONNX 模型與校準圖片。
+# INT8 calibration reference. Supply your own ONNX model and calibration images.
 class YOLOEntropyCalibrator(trt.IInt8EntropyCalibrator2):
     def __init__(self, img_dir, batch_size, input_shape=(640, 640)):
         trt.IInt8EntropyCalibrator2.__init__(self)
@@ -26,7 +26,7 @@ class YOLOEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         batch_imgs = []
         for i in range(self.batch_size):
             img_path = self.img_list[self.current_index + i]
-            # 校準輸入為 RGB、CHW，數值範圍為 0 到 1。
+            # Calibration input is RGB, CHW, normalized to [0, 1].
             img = cv2.imread(img_path)
             img = cv2.resize(img, self.input_shape)
             img = img[:, :, ::-1].transpose(2, 0, 1).astype(np.float32) / 255.0
@@ -38,7 +38,7 @@ class YOLOEntropyCalibrator(trt.IInt8EntropyCalibrator2):
         return [int(self.device_input)]
 
     def read_calibration_cache(self):
-        return None  # 每次重新校準，不沿用既有快取。
+        return None  # Recalibrate on each run.
 
     def write_calibration_cache(self, cache):
         with open("yolo_calib.cache", "wb") as f:
@@ -55,7 +55,7 @@ def build_int8_engine(onnx_file_path, engine_file_path, calib_img_dir):
         parser.parse(model.read())
         
     config = builder.create_config()
-    # TensorRT 工作空間上限為 1 GiB。
+    # Limit the TensorRT workspace to 1 GiB.
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 30) 
     
     config.set_flag(trt.BuilderFlag.INT8)
@@ -63,12 +63,12 @@ def build_int8_engine(onnx_file_path, engine_file_path, calib_img_dir):
     calibrator = YOLOEntropyCalibrator(calib_img_dir, batch_size=4)
     config.int8_calibrator = calibrator
     
-    print("正在進行 INT8 量化校準並編譯 Engine... 這需要幾分鐘...")
+    print("Calibrating and building the INT8 engine. This may take a few minutes...")
     serialized_engine = builder.build_serialized_network(network, config)
     
     with open(engine_file_path, "wb") as f:
         f.write(serialized_engine)
-    print(f"量化成功！Engine 儲存於: {engine_file_path}")
+    print(f"Saved INT8 engine to {engine_file_path}")
 
 if __name__ == "__main__":
     build_int8_engine("best.onnx", "yolo_int8.engine", "calib_images/")

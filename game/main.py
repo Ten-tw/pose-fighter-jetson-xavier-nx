@@ -23,17 +23,16 @@ MODEL_PATH = 'yolov8n-pose.engine'
 model = YOLO(MODEL_PATH)
 
 def open_camera():
-    """負責處理 Jetson 平台上的攝影機初始化"""
+    """Open a USB camera, with a Jetson CSI fallback."""
     cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
     
     if cap.isOpened():
-        print("[INFO] 成功開啟 USB 攝影機 (/dev/video0)")
+        print("[INFO] Opened USB camera (/dev/video0)")
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_HEIGHT)
         return cap
         
-    print("[WARN] 無法開啟 USB 攝影機，嘗試開啟 CSI 排線攝影機...")
-    # USB 無法開啟時，改用 Jetson CSI 攝影機管線。
+    print("[WARN] Could not open USB camera. Trying Jetson CSI camera...")
     gstreamer_pipeline = (
         f"nvarguscamerasrc ! "
         f"video/x-raw(memory:NVMM), width=(int){CAM_WIDTH}, height=(int){CAM_HEIGHT}, format=(string)NV12, framerate=(fraction)30/1 ! "
@@ -45,9 +44,9 @@ def open_camera():
     cap = cv2.VideoCapture(gstreamer_pipeline, cv2.CAP_GSTREAMER)
     
     if cap.isOpened():
-        print("[INFO] 成功開啟 CSI 攝影機 (GStreamer)")
+        print("[INFO] Opened CSI camera (GStreamer)")
     else:
-        print("[ERROR] 無法找到任何可用的攝影機裝置！")
+        print("[ERROR] No camera could be opened.")
         
     return cap
 
@@ -77,7 +76,7 @@ def analyze_pose(keypoints, box, player_id, was_extended):
     punch_dist = torso * 0.75  
     height_tolerance = torso * 0.8 
 
-    # 優先判定防禦，避免雙手舉高時誤觸攻擊。
+    # Check defense first to avoid treating raised hands as a punch.
     if keypoints[L_WRIST][1] > 0 and keypoints[R_WRIST][1] > 0:
         l_wrist_y = keypoints[L_WRIST][1]
         r_wrist_y = keypoints[R_WRIST][1]
@@ -98,11 +97,11 @@ def analyze_pose(keypoints, box, player_id, was_extended):
                     is_currently_extended = True
                     break
 
-    # 手臂由伸直轉為收回時觸發一次攻擊。
+    # Trigger one punch when the arm retracts.
     if was_extended and not is_currently_extended:
         result["attack"] = "punch"
 
-    # 以肩膀相對髖部的偏移判定傾斜，兩位玩家的前進方向相反。
+    # Compare shoulder and hip centers in each player's forward direction.
     mid_shoulder_x = sh_x
     mid_hip_x = (l_hip[0] + r_hip[0]) / 2 if l_hip[0]>0 and r_hip[0]>0 else (l_hip[0] if l_hip[0]>0 else r_hip[0])
     lean_threshold = (box[2] - box[0]) * 0.16 
@@ -127,7 +126,7 @@ def pose_estimation_worker(state_queue):
             
         frame = cv2.flip(frame, 1)
         
-        # 計時涵蓋整個模型呼叫，包含前處理與後處理。
+        # Includes preprocessing, inference, and postprocessing.
         t_start = time.time()
         
         results = model(frame, verbose=False)
@@ -163,7 +162,7 @@ def pose_estimation_worker(state_queue):
             if not p1_detected: p1_was_extended = False
             if not p2_detected: p2_was_extended = False
 
-        # 丟棄尚未消費的舊結果，避免辨識資料累積造成操作延遲。
+        # Keep only the latest result to avoid input lag.
         if not state_queue.empty():
             try: state_queue.get_nowait()
             except queue.Empty: pass
@@ -220,7 +219,7 @@ def main():
     p1_state = {"pos_x": 150, "punch_timer": 0, "hit_spark_timer": 0, "guard_text_timer": 0, "stun_timer": 0, "energy": 0, "crit_text_timer": 0}
     p2_state = {"pos_x": SCREEN_WIDTH - 150, "punch_timer": 0, "hit_spark_timer": 0, "guard_text_timer": 0, "stun_timer": 0, "energy": 0, "crit_text_timer": 0}
 
-    # 攻擊姿態維持固定幀數，避免隨辨識結果閃爍。
+    # Hold the punch animation across pose updates.
     PUNCH_HOLD_FRAMES = 15 
     EFFECT_DURATION = 8
     MOVE_SPEED = 4  

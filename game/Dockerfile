@@ -4,7 +4,7 @@ WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# 移除映像內的 NVIDIA apt 來源設定。
+# Remove NVIDIA apt sources from the base image.
 RUN find /etc/apt/ -type f -name "*.list" -exec sed -i '/repo.download.nvidia.com/d' {} +
 
 RUN apt-get update && apt-get install -y \
@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# 保留 Jetson 環境的 OpenCV，避免由 pip 安裝的版本覆蓋。
+# Preserve the Jetson OpenCV installation.
 RUN pip3 install --upgrade pip && \
     git clone --branch v8.2.100 https://github.com/ultralytics/ultralytics.git /tmp/ultralytics && \
     cd /tmp/ultralytics && \
